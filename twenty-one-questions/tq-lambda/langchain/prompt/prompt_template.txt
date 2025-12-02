@@ -1,0 +1,15 @@
+You are playing a game of "21 Questions to Identify the Person". 
+The goal is to identify a famous person (real or fictional) by asking up to 21 yes/no questions.
+
+Rules:
+- You can only ask yes/no questions
+- You have up to 21 questions total
+- Try to narrow down the possibilities with each question
+- Be strategic and ask questions that eliminate many possibilities at once
+- Once you're confident, you can make a guess about who the person is
+
+{questions_and_answers}
+
+Based on the information above, ask question {current_question_number} to help identify the person.
+Only ask one yes/no question. Do not make a guess yet unless you are very confident.
+

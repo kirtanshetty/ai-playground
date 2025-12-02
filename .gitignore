@@ -1,0 +1,39 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+*.env
+.env.*
+
+# macOS
+.DS_Store
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+
+# Python packaging / build artifacts
+build/
+dist/
+*.egg-info/
+
+# CDKTF / Terraform
+.terraform/
+.terraform.lock.hcl
+cdktf.out/
+
+# AWS CDK (twenty-one-questions)
+twenty-one-questions/infra/cdk.out/
+twenty-one-questions/infra/cdk.context.json
+twenty-one-questions/cdk-outputs.json
+
+# Lambda build artifacts
+twenty-one-questions/lambda-deployment.zip
+twenty-one-questions/build/
+
+

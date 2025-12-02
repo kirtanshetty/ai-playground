@@ -1,0 +1,12 @@
+{
+  "language": "python",
+  "app": "python3 app.py",
+  "projectId": "common-infra",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "codeMakerOutput": "imports",
+  "context": {}
+}
+
