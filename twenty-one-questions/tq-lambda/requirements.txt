@@ -2,5 +2,6 @@
 # Add any additional dependencies here if needed
 openai>=1.0.0
 langchain>=0.1.0
+langchain-core>=0.1.0
 psycopg2-binary>=2.9.0
 

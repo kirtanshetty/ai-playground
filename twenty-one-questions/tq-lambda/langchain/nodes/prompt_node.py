@@ -2,7 +2,7 @@
 Node that creates a prompt for the 21 questions game to identify a person.
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 
 def create_21_questions_prompt(
@@ -58,3 +58,35 @@ Rules:
         prompt += "Only ask one yes/no question."
 
     return prompt
+
+
+def prompt_node(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Node that creates a prompt and stores it in flow_state.
+    
+    Args:
+        state: State dictionary containing:
+            - game_state: GameState object with questions_and_answers and current_question_number
+            
+    Returns:
+        Updated state dictionary with:
+            - flow_state: Dictionary containing the prompt
+    """
+    game_state = state.get("game_state")
+    if not game_state:
+        raise ValueError("game_state is required in state")
+    
+    # Build or extend the flow_state for non-persistent, per-flow values
+    flow_state = dict(state.get("flow_state") or {})
+    
+    # Create and store the prompt in flow_state (not persisted to DB)
+    prompt = create_21_questions_prompt(
+        questions_and_answers=game_state.questions_and_answers,
+        current_question_number=game_state.current_question_number,
+    )
+    flow_state["prompt"] = prompt
+    
+    return {
+        **state,
+        "flow_state": flow_state,
+    }

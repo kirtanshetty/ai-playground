@@ -19,7 +19,7 @@ class DatabaseClient:
         self.db_secret_arn = os.getenv("DB_SECRET_ARN")
         self.db_endpoint = os.getenv("DB_ENDPOINT")
         self.db_port = os.getenv("DB_PORT", "5432")
-        self.db_name = os.getenv("DB_NAME", "appdb")
+        self.db_name = os.getenv("DB_NAME", "aiplaygrounddb")
         self._connection_pool: Optional[pool.ThreadedConnectionPool] = None
         self._secrets_client = boto3.client("secretsmanager")
 

@@ -1,71 +1,60 @@
-import json
+"""
+AWS Lambda handler for 21 questions game using LangChain chain.
+"""
+
+import sys
+import os
+
+# Add common-lib to path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../"))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from langchain.chains.twenty_one_questions_chain import twenty_one_questions_chain
 
 
 def lambda_handler(event, context):
     """
-    AWS Lambda handler that accepts a session key as input.
-
+    AWS Lambda handler for 21 questions game.
+    
     Args:
         event: Lambda event object containing the input data
         context: Lambda context object
-
+        
     Returns:
-        dict: Response containing status code and body
+        dict: Response containing the result or error
     """
+    # Extract session key from event for all responses
+    session_key = event.get("sessionKey") or event.get("session_key")
+    
     try:
-        # Extract session key from event
-        # Support Lambda Function URL (HTTP) and direct invocation formats
-        if isinstance(event, dict):
-            # Check if it's a Lambda Function URL HTTP event
-            if "body" in event:
-                # POST request with body
-                body = (
-                    json.loads(event["body"]) if isinstance(event["body"], str) else event["body"]
-                )
-                session_key = body.get("sessionKey") or body.get("session_key")
-            elif "queryStringParameters" in event and event["queryStringParameters"]:
-                # GET request with query parameters
-                session_key = event["queryStringParameters"].get("sessionKey") or event[
-                    "queryStringParameters"
-                ].get("session_key")
-            else:
-                # Direct invocation
-                session_key = event.get("sessionKey") or event.get("session_key")
+        # Run the chain with the event
+        result = twenty_one_questions_chain.invoke(event)
+        
+        # Extract the response from the result
+        response = result.get("response")
+        
+        if response:
+            # Ensure session key is included (response_node should already include it, but ensure it's there)
+            if session_key and "sessionKey" not in response:
+                response["sessionKey"] = session_key
+            return response
         else:
-            session_key = None
-
-        if not session_key:
             return {
-                "statusCode": 400,
-                "body": json.dumps(
-                    {
-                        "error": "Missing session key",
-                        "message": "Please provide a sessionKey or session_key in the request",
-                    }
-                ),
+                "error": "Internal server error",
+                "message": "Chain did not return a response",
+                "sessionKey": session_key,
             }
-
-        # Process the session key (add your business logic here)
-        # For now, just return a success response
-        response_data = {
-            "status": "success",
+    
+    except ValueError as e:
+        return {
+            "error": "Invalid input",
+            "message": str(e),
             "sessionKey": session_key,
-            "message": "Session key received successfully",
-        }
-
-        return {
-            "statusCode": 200,
-            "body": json.dumps(response_data),
-            "headers": {"Content-Type": "application/json"},
-        }
-
-    except json.JSONDecodeError as e:
-        return {
-            "statusCode": 400,
-            "body": json.dumps({"error": "Invalid JSON", "message": str(e)}),
         }
     except Exception as e:
         return {
-            "statusCode": 500,
-            "body": json.dumps({"error": "Internal server error", "message": str(e)}),
+            "error": "Internal server error",
+            "message": str(e),
+            "sessionKey": session_key,
         }
