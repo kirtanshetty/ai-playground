@@ -2,10 +2,10 @@
 
 init:
 	@pip3 install -r requirements.txt --quiet
-	@cdktf get
+	@npx -y cdktf-cli@latest get
 
 deploy: init
-	@cdktf deploy --auto-approve
+	@npx -y cdktf-cli@latest deploy --auto-approve
 
 destroy:
-	@cdktf destroy --auto-approve
+	@npx -y cdktf-cli@latest destroy --auto-approve

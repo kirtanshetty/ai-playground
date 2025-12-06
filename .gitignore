@@ -36,4 +36,6 @@ twenty-one-questions/cdk-outputs.json
 twenty-one-questions/lambda-deployment.zip
 twenty-one-questions/build/
 
+# Config files with sensitive data
+common-infra/config.json
 

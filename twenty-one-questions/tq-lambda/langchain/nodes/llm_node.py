@@ -4,9 +4,131 @@ Node that uses the OpenAI client to call the LLM for the next question.
 
 import os
 import json
-from typing import Optional, Dict, Any
+import re
+from typing import Optional, Dict, Any, Tuple
 
 from llm import OpenAIClient
+
+
+def detect_guess(text: str) -> Tuple[bool, Optional[str]]:
+    """
+    Detect if the LLM response is a guess (not a question).
+    A guess must:
+    1. Be a question (contain ?)
+    2. Ask about a specific person's name
+    3. Match specific guess patterns like "Is it [Name]?" or "Are you thinking of [Name]?"
+    4. The extracted name must look like a real person's name (not a phrase or description)
+    
+    Args:
+        text: The LLM response text
+        
+    Returns:
+        Tuple of (is_guess, guessed_person_name)
+        - is_guess: True if the response appears to be a guess
+        - guessed_person_name: The name of the person if it's a guess, None otherwise
+    """
+    text = text.strip()
+    text_lower = text.lower()
+    
+    # Must contain a question mark to be a guess
+    if '?' not in text:
+        return False, None
+    
+    # Patterns that indicate a guess - more flexible, don't require exact start/end
+    # Each pattern captures a person's name after a guess phrase
+    # Allow for some text before/after (LLM might add context)
+    guess_patterns = [
+        r"is it (.+?)\?",
+        r"are you thinking of (.+?)\?",
+        r"is the person (.+?)\?",
+        r"could it be (.+?)\?",
+        r"is (.+?) the person\?",
+        r"my guess is (.+?)\?",
+        r"i think it's (.+?)\?",
+        r"i believe it's (.+?)\?",
+        r"are you (.+?)\?",  # "Are you Albert Einstein?"
+        r"is the person you're thinking of (.+?)\?",
+    ]
+    
+    for pattern in guess_patterns:
+        match = re.search(pattern, text_lower, re.IGNORECASE)
+        if match:
+            guessed_name = match.group(1).strip()
+            # Clean up the name (remove quotes, extra spaces, trailing punctuation)
+            guessed_name = re.sub(r'^["\']|["\']$', '', guessed_name).strip()
+            guessed_name = re.sub(r'[.,;:!?]+$', '', guessed_name).strip()
+            
+            # Validate that it looks like a person's name
+            if guessed_name and is_valid_person_name(guessed_name):
+                # Capitalize the name properly (first letter of each word)
+                guessed_name = ' '.join(word.capitalize() for word in guessed_name.split())
+                return True, guessed_name
+    
+    return False, None
+
+
+def is_valid_person_name(name: str) -> bool:
+    """
+    Validate if a string looks like a real person's name.
+    More lenient - allows lowercase names and focuses on excluding invalid phrases.
+    
+    Args:
+        name: The string to validate
+        
+    Returns:
+        True if it looks like a person's name, False otherwise
+    """
+    if not name or len(name) < 2:
+        return False
+    
+    # Split into words
+    words = name.split()
+    
+    # Person names are usually 1-4 words (allow up to 5 for names like "Mary Jane Watson")
+    if len(words) > 5:
+        return False
+    
+    # Exclude common phrases that aren't names
+    invalid_phrases = [
+        'trying to', 'identify', 'a male', 'a female', 'male', 'female',
+        'person', 'someone', 'somebody', 'anyone', 'anybody',
+        'real person', 'famous person', 'historical figure',
+        'yes', 'no', 'maybe', 'perhaps', 'possibly',
+        'thinking of', 'you are', 'you\'re', 'i am', 'i\'m',
+        'the person', 'this person', 'that person',
+    ]
+    
+    name_lower = name.lower().strip()
+    
+    # Check for invalid phrases
+    for phrase in invalid_phrases:
+        if phrase in name_lower:
+            return False
+    
+    # Exclude if it's just a description (starts with "a" or "an" followed by adjective)
+    if re.match(r'^(a|an|the)\s+[a-z]+', name_lower):
+        return False
+    
+    # Exclude if it contains question words (unless it's part of a compound name, which is rare)
+    question_words = ['what', 'where', 'when', 'why', 'how', 'which']
+    for word in question_words:
+        if word in name_lower.split():  # Only check if it's a whole word
+            return False
+    
+    # Exclude if it's too generic (single common words that aren't names)
+    generic_words = ['who', 'someone', 'anyone', 'somebody', 'anybody', 'person']
+    if name_lower in generic_words:
+        return False
+    
+    # Exclude if it looks like a sentence or contains verbs
+    # Common verbs that shouldn't be in names
+    verbs = ['is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had']
+    if any(verb in name_lower.split() for verb in verbs):
+        return False
+    
+    # If we've passed all the exclusion checks, it's likely a name
+    # (even if lowercase, we'll capitalize it later)
+    return True
 
 
 def get_next_question_from_prompt(
@@ -14,10 +136,13 @@ def get_next_question_from_prompt(
     model: str = "gpt-4",
     api_key: Optional[str] = None,
     **kwargs,
-) -> str:
+) -> Tuple[str, bool, Optional[str]]:
     """
     Use the OpenAI client to get the next question for the 21 questions game,
     given a fully constructed prompt.
+    
+    Returns:
+        Tuple of (response_text, is_guess, guessed_person_name)
     """
     # Initialize the OpenAI client
     client = OpenAIClient(api_key=api_key)
@@ -31,15 +156,19 @@ def get_next_question_from_prompt(
         **kwargs,
     )
 
-    # Extract the question from the response
-    question = response.choices[0].message.content.strip()
-
-    return question
+    # Extract the response from the LLM
+    response_text = response.choices[0].message.content.strip()
+    
+    # Detect if it's a guess
+    is_guess, guessed_person = detect_guess(response_text)
+    
+    return response_text, is_guess, guessed_person
 
 
 def llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Node that calls the LLM to get the next question.
+    Skips LLM call if prompt is None (game completed).
     
     Args:
         state: State dictionary containing:
@@ -47,13 +176,21 @@ def llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
             
     Returns:
         Updated state dictionary with:
-            - next_question: The next question string from LLM
+            - next_question: The next question string from LLM (or None if game completed)
+            - is_guess: Boolean indicating if response is a guess
+            - guessed_person: Name of person if it's a guess
     """
     flow_state = state.get("flow_state") or {}
     prompt = flow_state.get("prompt")
     
-    if not prompt:
-        raise ValueError("prompt is required in flow_state")
+    # If prompt is None, game is completed - skip LLM call
+    if prompt is None:
+        return {
+            **state,
+            "next_question": None,
+            "is_guess": False,
+            "guessed_person": None,
+        }
     
     api_key = os.getenv("OPENAI_API_KEY")
     
@@ -90,7 +227,7 @@ def llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 api_key = original_api_key
     
     # Call the LLM with the prompt
-    next_question = get_next_question_from_prompt(
+    response_text, is_guess, guessed_person = get_next_question_from_prompt(
         prompt=prompt,
         model="gpt-4",
         api_key=api_key,
@@ -99,5 +236,7 @@ def llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
     return {
         **state,
         # Values that need to be shared with later nodes stay on the main state
-        "next_question": next_question,
+        "next_question": response_text,
+        "is_guess": is_guess,
+        "guessed_person": guessed_person,
     }

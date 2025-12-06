@@ -2,9 +2,9 @@
 CDKTF stack for RDS database with minimal configuration.
 """
 
+import json
 import os
-import random
-import string
+from pathlib import Path
 from cdktf import TerraformStack, TerraformOutput, S3Backend
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
@@ -37,6 +37,13 @@ class RDSStack(TerraformStack):
             region=region,
             encrypt=True,
         )
+
+        # Load database credentials from config file
+        config_path = Path(__file__).parent.parent / "config.json"
+        with open(config_path, "r") as f:
+            config = json.load(f)
+        db_username = config["database"]["username"]
+        db_password = config["database"]["password"]
 
         # Get default VPC
         default_vpc = DataAwsVpc(
@@ -80,17 +87,22 @@ class RDSStack(TerraformStack):
             name="rds-security-group",
             description="Security group for RDS database",
             vpc_id=default_vpc.id,
-            egress=[
-                {
-                    "from_port": 0,
-                    "to_port": 0,
-                    "protocol": "-1",
-                    "cidr_blocks": ["0.0.0.0/0"],
-                }
-            ],
             tags={
                 "Name": "rds-security-group",
             },
+        )
+
+        # Allow all outbound traffic (egress rule)
+        SecurityGroupRule(
+            self,
+            "rds_egress_rule",
+            type="egress",
+            from_port=0,
+            to_port=0,
+            protocol="-1",
+            cidr_blocks=["0.0.0.0/0"],
+            security_group_id=db_security_group.id,
+            description="Allow all outbound traffic",
         )
 
         # Allow Lambda to connect to RDS from anywhere (for non-VPC Lambda)
@@ -115,12 +127,8 @@ class RDSStack(TerraformStack):
             description="RDS database credentials",
         )
 
-        # Generate secret value with username and random password
-        # Note: In production, use a more secure password generation
-        password = "".join(
-            random.choices(string.ascii_letters + string.digits, k=32)
-        )
-        secret_string = f'{{"username": "admin", "password": "{password}"}}'
+        # Create secret value with username and password from config
+        secret_string = f'{{"username": "{db_username}", "password": "{db_password}"}}'
 
         SecretsmanagerSecretVersion(
             self,
@@ -130,15 +138,17 @@ class RDSStack(TerraformStack):
         )
 
         # Create Aurora PostgreSQL cluster with free tier configuration
+        # Using engine version 15.6 (15.4 is not available in us-east-1)
+        # Note: database_name must be alphanumeric only (no hyphens)
         cluster = RdsCluster(
             self,
             "aurora_cluster",
             cluster_identifier="ai-playground-db",
             engine="aurora-postgresql",
-            engine_version="15.4",
-            database_name="ai-playground-db",
-            master_username="admin",
-            master_password=password,
+            engine_version="15.6",
+            database_name="aiplaygrounddb",
+            master_username=db_username,
+            master_password=db_password,
             db_subnet_group_name=subnet_group.name,
             vpc_security_group_ids=[db_security_group.id],
             skip_final_snapshot=True,  # For development - change for production
@@ -149,14 +159,17 @@ class RDSStack(TerraformStack):
             },
         )
 
-        # Create Aurora cluster instance (free tier: db.t3.small)
+        # Create Aurora cluster instance
+        # Note: db.t3.small is not available for Aurora PostgreSQL 15.6
+        # Using db.t3.medium as the smallest available instance class
         cluster_instance = RdsClusterInstance(
             self,
             "aurora_instance",
             identifier="ai-playground-db-instance-1",
             cluster_identifier=cluster.id,
-            instance_class="db.t3.small",  # Free tier eligible
+            instance_class="db.t3.medium",  # Smallest available for Aurora PostgreSQL 15.6
             engine=cluster.engine,
+            engine_version="15.6",  # Must match cluster engine version
             publicly_accessible=True,  # For minimal config with non-VPC Lambda
             tags={
                 "Name": "ai-playground-db-instance-1",
@@ -179,11 +192,11 @@ class RDSStack(TerraformStack):
             description="Aurora database port",
         )
 
-        # Output database name
+        # Output database name (must match the actual database_name in cluster config)
         TerraformOutput(
             self,
             "database_name",
-            value="ai-playground-db",
+            value=cluster.database_name,
             description="Aurora database name",
         )
 
