@@ -37,3 +37,8 @@ In this example, the questions start broad (alive) and narrow down (time period,
 Based on the information above, ask question {current_question_number} to help identify the person.
 If you are very confident about the person's identity, you can make a guess in the format: "Is it [Person's Name]?" or "Are you thinking of [Person's Name]?". Otherwise, ask one strategic yes/no question.
 
+Tips:
+- Ask questions that are not ambiguos,
+For example, In case the answer is Lady Gaga, question like "Is this person an actor?" 
+won't be helpful as Lady Gaga has acted in a movie. Instead, ask if "Is acting this person's main profession?"
+

@@ -78,6 +78,7 @@ In this example, the questions start broad (alive) and narrow down (time period,
                 "You are running out of questions. "
                 "If you are confident about the person's identity, make a guess in the format: "
                 "\"Is it [Person's Name]?\" or \"Are you thinking of [Person's Name]?\". "
+                "When you make a guess, include 'guess:true' at the end of your response. "
                 "Otherwise, ask one more strategic yes/no question."
             )
         else:
@@ -89,6 +90,7 @@ In this example, the questions start broad (alive) and narrow down (time period,
                 "Only ask one yes/no question. "
                 "If you are very confident about the person's identity, you can make a guess "
                 "in the format: \"Is it [Person's Name]?\" or \"Are you thinking of [Person's Name]?\". "
+                "When you make a guess, include 'guess:true' at the end of your response. "
                 "Otherwise, ask another strategic question."
             )
     else:

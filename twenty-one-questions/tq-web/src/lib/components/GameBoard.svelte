@@ -18,6 +18,7 @@
 	let sessionKey: string | null = null;
 	let victoryStatement: string | null = null;
 	let defeatStatement: string | null = null;
+	let currentQuestionIsGuess: boolean = false;
 
 	const MAX_QUESTIONS = 21;
 
@@ -55,6 +56,7 @@
 
 			currentQuestion = data.question || '';
 			questionNumber = data.questionNumber || 1;
+			currentQuestionIsGuess = data.guess || false;
 		} catch (error) {
 			console.error('Error starting game:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -108,6 +110,9 @@
 			}
 
 			// Check if game is completed (target person found or game lost)
+			// This can happen if:
+			// 1. A guess was answered with "yes" (game won)
+			// 2. Max questions reached without correct guess (game lost)
 			if (data.gameCompleted) {
 				gameCompleted = true;
 				targetPerson = data.targetPerson || null;
@@ -118,6 +123,7 @@
 
 			currentQuestion = data.question || '';
 			questionNumber = data.questionNumber || questionNumber;
+			currentQuestionIsGuess = data.guess || false;
 		} catch (error) {
 			console.error('Error submitting answer:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -137,6 +143,7 @@
 		sessionKey = null;
 		victoryStatement = null;
 		defeatStatement = null;
+		currentQuestionIsGuess = false;
 	}
 </script>
 

@@ -38,16 +38,17 @@ def detect_guess(text: str) -> Tuple[bool, Optional[str]]:
     # Each pattern captures a person's name after a guess phrase
     # Allow for some text before/after (LLM might add context)
     guess_patterns = [
-        r"is it (.+?)\?",
-        r"are you thinking of (.+?)\?",
-        r"is the person (.+?)\?",
-        r"could it be (.+?)\?",
-        r"is (.+?) the person\?",
-        r"my guess is (.+?)\?",
-        r"i think it's (.+?)\?",
-        r"i believe it's (.+?)\?",
+        r"is it (.+?)\?",  # "Is it Albert Einstein?"
+        r"are you thinking of (.+?)\?",  # "Are you thinking of Albert Einstein?"
+        r"could it be (.+?)\?",  # "Could it be Albert Einstein?"
+        r"is (.+?) the person\?",  # "Is Albert Einstein the person?"
+        r"my guess is (.+?)\?",  # "My guess is Albert Einstein?"
+        r"i think it's (.+?)\?",  # "I think it's Albert Einstein?"
+        r"i believe it's (.+?)\?",  # "I believe it's Albert Einstein?"
         r"are you (.+?)\?",  # "Are you Albert Einstein?"
-        r"is the person you're thinking of (.+?)\?",
+        r"is the person you're thinking of (.+?)\?",  # "Is the person you're thinking of Albert Einstein?"
+        # Note: "Is the person [X]?" is NOT a guess pattern - it's a regular question format
+        # So we don't include it here
     ]
     
     for pattern in guess_patterns:
@@ -96,6 +97,9 @@ def is_valid_person_name(name: str) -> bool:
         'yes', 'no', 'maybe', 'perhaps', 'possibly',
         'thinking of', 'you are', 'you\'re', 'i am', 'i\'m',
         'the person', 'this person', 'that person',
+        # Common adjectives/descriptive words that aren't names
+        'alive', 'dead', 'famous', 'unknown', 'young', 'old', 'tall', 'short',
+        'rich', 'poor', 'smart', 'famous', 'popular', 'well-known',
     ]
     
     name_lower = name.lower().strip()
@@ -159,8 +163,29 @@ def get_next_question_from_prompt(
     # Extract the response from the LLM
     response_text = response.choices[0].message.content.strip()
     
-    # Detect if it's a guess
+    # Check if LLM explicitly included "guess:true" in the response
+    has_guess_flag = "guess:true" in response_text.lower()
+    
+    # Remove "guess:true" from the response text if present (clean it up)
+    if has_guess_flag:
+        response_text = re.sub(r'\s*guess:\s*true\s*', '', response_text, flags=re.IGNORECASE).strip()
+    
+    # Detect if it's a guess (either via pattern matching or explicit flag)
     is_guess, guessed_person = detect_guess(response_text)
+    
+    # If LLM explicitly said "guess:true", treat it as a guess even if pattern doesn't match
+    if has_guess_flag and not is_guess:
+        is_guess = True
+        # Try to extract person name from the question if we can
+        if not guessed_person:
+            # Try to extract from common guess patterns
+            for pattern in [r"is it (.+?)\?", r"are you thinking of (.+?)\?", r"are you (.+?)\?"]:
+                match = re.search(pattern, response_text.lower(), re.IGNORECASE)
+                if match:
+                    guessed_person = match.group(1).strip()
+                    guessed_person = re.sub(r'^["\']|["\']$', '', guessed_person).strip()
+                    guessed_person = ' '.join(word.capitalize() for word in guessed_person.split())
+                    break
     
     return response_text, is_guess, guessed_person
 
