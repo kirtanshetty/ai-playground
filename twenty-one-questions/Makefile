@@ -47,7 +47,7 @@ $(VENV_DIR):
 
 build-amplify: clean-amplify
 	@echo "Preparing web app for AWS Amplify deployment..."
-	@cd $(WEB_DIR) && npm ci
+	@cd $(WEB_DIR) && npm install
 	@echo "Building SvelteKit app..."
 	@cd $(WEB_DIR) && npm run build
 	@echo "Creating Amplify deployment package..."
