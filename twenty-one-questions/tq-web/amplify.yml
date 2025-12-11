@@ -8,7 +8,7 @@ frontend:
       commands:
         - npm run build
   artifacts:
-    baseDirectory: .svelte-kit
+    baseDirectory: build
     files:
       - '**/*'
   cache:
