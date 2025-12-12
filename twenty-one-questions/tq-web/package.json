@@ -15,7 +15,7 @@
 		"@aws-sdk/client-lambda": "^3.0.0"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-static": "^3.0.0",
+		"amplify-adapter": "^1.0.0",
 		"@sveltejs/kit": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^3.0.0",
 		"svelte": "^4.2.7",
