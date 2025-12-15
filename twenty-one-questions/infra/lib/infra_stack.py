@@ -210,7 +210,7 @@ class TQLambdaStack(TerraformStack):
         )
 
         # Lambda permission to allow any principal in this AWS account to invoke the function
-        # This is needed for Amplify SSR to call the Lambda function
+        # This is needed for Amplify SSR to call the Lambda function via SDK
         LambdaPermission(
             self,
             "amplify_invoke_permission",
@@ -219,6 +219,19 @@ class TQLambdaStack(TerraformStack):
             principal=f"arn:aws:iam::{current_account.account_id}:root",
             statement_id="AllowAccountInvoke",
             depends_on=[tq_lambda],
+        )
+
+        # Lambda permission to allow public access via Function URL
+        # Required for Amplify SSR to call the Lambda via HTTP (Function URL with AuthType NONE)
+        LambdaPermission(
+            self,
+            "public_function_url_permission",
+            function_name=tq_lambda.function_name,
+            action="lambda:InvokeFunctionUrl",
+            principal="*",
+            function_url_auth_type="NONE",
+            statement_id="AllowPublicFunctionUrl",
+            depends_on=[function_url],
         )
 
         # Output the Lambda function name for Amplify configuration
