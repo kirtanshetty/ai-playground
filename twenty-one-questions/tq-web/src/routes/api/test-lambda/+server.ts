@@ -1,26 +1,31 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
 
-// Lambda Function URL
-const LAMBDA_FUNCTION_URL = env.LAMBDA_FUNCTION_URL;
+// Use process.env directly for better compatibility with Amplify SSR
+// Fallback URL is provided for cases where env var isn't propagated correctly
+const LAMBDA_FUNCTION_URL = process.env.LAMBDA_FUNCTION_URL;
+const FALLBACK_LAMBDA_URL = 'https://j6pfsyy53ljmwbok5osjxrddwe0hfidq.lambda-url.us-east-1.on.aws/';
 
 export const GET: RequestHandler = async () => {
 	try {
-		if (!LAMBDA_FUNCTION_URL) {
-			return json(
-				{
-					success: false,
-					error: 'LAMBDA_FUNCTION_URL not configured',
-					help: 'Set LAMBDA_FUNCTION_URL in Amplify Console → Environment Variables. ' +
-						'Get the URL by running: cd twenty-one-questions/infra && cdktf output',
-				},
-				{ status: 500 }
-			);
-		}
+		// Try multiple ways to get the URL, with fallback
+		const functionUrl = LAMBDA_FUNCTION_URL || 
+			process.env.LAMBDA_FUNCTION_URL ||
+			process.env.lambda_function_url ||
+			FALLBACK_LAMBDA_URL;
+		
+		// Get all env keys for debugging
+		const envKeys = Object.keys(process.env).filter(k => 
+			k.includes('LAMBDA') || k.includes('AWS') || k.includes('AMPLIFY') || k.includes('NODE')
+		);
+		
+		// Determine URL source for debugging
+		const urlSource = LAMBDA_FUNCTION_URL ? 'env-const' : 
+			process.env.LAMBDA_FUNCTION_URL ? 'process.env' :
+			process.env.lambda_function_url ? 'process.env-lowercase' : 'fallback';
 
 		// Test with a simple session key
-		const lambdaResponse = await fetch(LAMBDA_FUNCTION_URL, {
+		const lambdaResponse = await fetch(functionUrl, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -52,7 +57,9 @@ export const GET: RequestHandler = async () => {
 			message: 'Lambda function invoked successfully',
 			response: payload,
 			config: {
-				functionUrl: LAMBDA_FUNCTION_URL,
+				functionUrl: functionUrl,
+				urlSource: urlSource,
+				availableEnvKeys: envKeys,
 			},
 		});
 	} catch (error: any) {

@@ -1,15 +1,15 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
 
-// Determine mode from environment variable
-// Use local debug server only if explicitly enabled
-const USE_DEBUG_SERVER = env.USE_DEBUG_SERVER === 'true' || env.DEBUG_MODE === 'true';
-const DEBUG_SERVER_URL = env.DEBUG_SERVER_URL || 'http://localhost:8000';
+// Use process.env directly for better compatibility with Amplify SSR
+const USE_DEBUG_SERVER = process.env.USE_DEBUG_SERVER === 'true' || process.env.DEBUG_MODE === 'true';
+const DEBUG_SERVER_URL = process.env.DEBUG_SERVER_URL || 'http://localhost:8000';
 
 // Lambda Function URL - this is the primary way to call Lambda from Amplify
 // Set this in Amplify Console environment variables after deploying infrastructure
-const LAMBDA_FUNCTION_URL = env.LAMBDA_FUNCTION_URL;
+// Fallback URL is provided for cases where env var isn't propagated correctly
+const LAMBDA_FUNCTION_URL = process.env.LAMBDA_FUNCTION_URL;
+const FALLBACK_LAMBDA_URL = 'https://j6pfsyy53ljmwbok5osjxrddwe0hfidq.lambda-url.us-east-1.on.aws/';
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {
@@ -53,16 +53,20 @@ export const POST: RequestHandler = async ({ request }) => {
 			}
 		} else {
 			// Production mode: Call Lambda via Function URL (HTTP)
-			if (!LAMBDA_FUNCTION_URL) {
-				throw new Error(
-					'LAMBDA_FUNCTION_URL environment variable is not set. ' +
-					'Please set it in Amplify Console → App Settings → Environment Variables. ' +
-					'Get the URL from: cd twenty-one-questions/infra && cdktf output'
-				);
-			}
+			// Try multiple ways to get the URL, with fallback
+			const functionUrl = LAMBDA_FUNCTION_URL || 
+				process.env.LAMBDA_FUNCTION_URL ||
+				process.env.lambda_function_url ||
+				FALLBACK_LAMBDA_URL;
+			
+			// Log which URL source we're using
+			const urlSource = LAMBDA_FUNCTION_URL ? 'env-const' : 
+				process.env.LAMBDA_FUNCTION_URL ? 'process.env' :
+				process.env.lambda_function_url ? 'process.env-lowercase' : 'fallback';
+			console.log(`Using Lambda URL from: ${urlSource}`);
 
 			try {
-				const lambdaResponse = await fetch(LAMBDA_FUNCTION_URL, {
+				const lambdaResponse = await fetch(functionUrl, {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
@@ -85,7 +89,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			} catch (fetchError: any) {
 				if (fetchError instanceof TypeError && fetchError.message.includes('fetch')) {
 					throw new Error(
-						`Cannot connect to Lambda Function URL at ${LAMBDA_FUNCTION_URL}. ` +
+						`Cannot connect to Lambda Function URL at ${functionUrl}. ` +
 						`Please verify the URL is correct and the Lambda function is deployed.`
 					);
 				}
