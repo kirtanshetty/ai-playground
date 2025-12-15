@@ -2,86 +2,70 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 
-// AWS Lambda configuration
-const LAMBDA_FUNCTION_NAME = env.LAMBDA_FUNCTION_NAME || 'tq-lambda';
-const AWS_REGION = env.AWS_REGION || 'us-east-1';
+// Lambda Function URL
+const LAMBDA_FUNCTION_URL = env.LAMBDA_FUNCTION_URL;
 
 export const GET: RequestHandler = async () => {
 	try {
-		const { LambdaClient, InvokeCommand } = await import('@aws-sdk/client-lambda');
-
-		const lambdaClient = new LambdaClient({ region: AWS_REGION });
+		if (!LAMBDA_FUNCTION_URL) {
+			return json(
+				{
+					success: false,
+					error: 'LAMBDA_FUNCTION_URL not configured',
+					help: 'Set LAMBDA_FUNCTION_URL in Amplify Console → Environment Variables. ' +
+						'Get the URL by running: cd twenty-one-questions/infra && cdktf output',
+				},
+				{ status: 500 }
+			);
+		}
 
 		// Test with a simple session key
-		const command = new InvokeCommand({
-			FunctionName: LAMBDA_FUNCTION_NAME,
-			Payload: JSON.stringify({
+		const lambdaResponse = await fetch(LAMBDA_FUNCTION_URL, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
 				sessionKey: 'test-session-' + Date.now(),
 			}),
 		});
 
-		const lambdaResponse = await lambdaClient.send(command);
-
-		if (lambdaResponse.FunctionError) {
-			const errorPayload = lambdaResponse.Payload 
-				? JSON.parse(new TextDecoder().decode(lambdaResponse.Payload))
-				: {};
+		if (!lambdaResponse.ok) {
+			const errorText = await lambdaResponse.text();
 			return json(
 				{
 					success: false,
 					error: 'Lambda function error',
 					details: {
-						functionError: lambdaResponse.FunctionError,
-						errorPayload,
+						status: lambdaResponse.status,
+						response: errorText,
 					},
 				},
 				{ status: 500 }
 			);
 		}
 
-		if (!lambdaResponse.Payload) {
-			return json(
-				{
-					success: false,
-					error: 'Lambda returned empty response',
-				},
-				{ status: 500 }
-			);
-		}
-
-		const payload = JSON.parse(new TextDecoder().decode(lambdaResponse.Payload));
+		const payload = await lambdaResponse.json();
 
 		return json({
 			success: true,
 			message: 'Lambda function invoked successfully',
 			response: payload,
 			config: {
-				functionName: LAMBDA_FUNCTION_NAME,
-				region: AWS_REGION,
+				functionUrl: LAMBDA_FUNCTION_URL,
 			},
 		});
 	} catch (error: any) {
 		console.error('Lambda test error:', error);
 
-		let errorDetails: any = {
-			message: error.message || String(error),
-			name: error.name,
-		};
-
-		// Provide helpful error messages for common AWS issues
-		if (error.name === 'CredentialsProviderError' || error.message?.includes('credentials')) {
-			errorDetails.help = 'AWS credentials not configured. Please run `aws configure` or set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.';
-		} else if (error.name === 'ResourceNotFoundException' || error.message?.includes('not found')) {
-			errorDetails.help = `Lambda function '${LAMBDA_FUNCTION_NAME}' not found in region '${AWS_REGION}'. Please check the function name and region.`;
-		} else if (error.name === 'AccessDeniedException' || error.message?.includes('AccessDenied')) {
-			errorDetails.help = `Access denied to Lambda function '${LAMBDA_FUNCTION_NAME}'. Please check your IAM permissions.`;
-		}
-
 		return json(
 			{
 				success: false,
 				error: 'Failed to invoke Lambda function',
-				details: errorDetails,
+				details: {
+					message: error.message || String(error),
+					name: error.name,
+				},
 			},
 			{ status: 500 }
 		);

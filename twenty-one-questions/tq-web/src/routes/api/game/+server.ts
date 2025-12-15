@@ -4,13 +4,12 @@ import { env } from '$env/dynamic/private';
 
 // Determine mode from environment variable
 // Use local debug server only if explicitly enabled
-// Otherwise, call AWS Lambda directly (works for both local and deployed)
 const USE_DEBUG_SERVER = env.USE_DEBUG_SERVER === 'true' || env.DEBUG_MODE === 'true';
 const DEBUG_SERVER_URL = env.DEBUG_SERVER_URL || 'http://localhost:8000';
 
-// AWS Lambda configuration
-const LAMBDA_FUNCTION_NAME = env.LAMBDA_FUNCTION_NAME || 'tq-lambda';
-const AWS_REGION = env.AWS_REGION || 'us-east-1';
+// Lambda Function URL - this is the primary way to call Lambda from Amplify
+// Set this in Amplify Console environment variables after deploying infrastructure
+const LAMBDA_FUNCTION_URL = env.LAMBDA_FUNCTION_URL;
 
 export const POST: RequestHandler = async ({ request }) => {
 	try {
@@ -53,61 +52,44 @@ export const POST: RequestHandler = async ({ request }) => {
 				throw fetchError;
 			}
 		} else {
-			// Call AWS Lambda directly using AWS SDK
+			// Production mode: Call Lambda via Function URL (HTTP)
+			if (!LAMBDA_FUNCTION_URL) {
+				throw new Error(
+					'LAMBDA_FUNCTION_URL environment variable is not set. ' +
+					'Please set it in Amplify Console → App Settings → Environment Variables. ' +
+					'Get the URL from: cd twenty-one-questions/infra && cdktf output'
+				);
+			}
+
 			try {
-				const { LambdaClient, InvokeCommand } = await import('@aws-sdk/client-lambda');
-
-				const lambdaClient = new LambdaClient({ region: AWS_REGION });
-
-				const command = new InvokeCommand({
-					FunctionName: LAMBDA_FUNCTION_NAME,
-					Payload: JSON.stringify({
+				const lambdaResponse = await fetch(LAMBDA_FUNCTION_URL, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
 						sessionKey,
 						answer,
 						questionNumber,
 					}),
 				});
 
-				const lambdaResponse = await lambdaClient.send(command);
-
-				if (lambdaResponse.FunctionError) {
-					const errorPayload = lambdaResponse.Payload 
-						? JSON.parse(new TextDecoder().decode(lambdaResponse.Payload))
-						: {};
+				if (!lambdaResponse.ok) {
+					const errorText = await lambdaResponse.text();
 					throw new Error(
-						`Lambda function error: ${lambdaResponse.FunctionError}. ` +
-						`Details: ${JSON.stringify(errorPayload)}`
+						`Lambda function error (${lambdaResponse.status}): ${errorText}`
 					);
 				}
 
-				if (!lambdaResponse.Payload) {
-					throw new Error('Lambda returned empty response');
-				}
-
-				const payload = JSON.parse(
-					new TextDecoder().decode(lambdaResponse.Payload)
-				);
-				response = payload;
-			} catch (awsError: any) {
-				// Provide helpful error messages for common AWS issues
-				if (awsError.name === 'CredentialsProviderError' || awsError.message?.includes('credentials')) {
+				response = await lambdaResponse.json();
+			} catch (fetchError: any) {
+				if (fetchError instanceof TypeError && fetchError.message.includes('fetch')) {
 					throw new Error(
-						'AWS credentials not configured. Please run `aws configure` or set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables.'
+						`Cannot connect to Lambda Function URL at ${LAMBDA_FUNCTION_URL}. ` +
+						`Please verify the URL is correct and the Lambda function is deployed.`
 					);
 				}
-				if (awsError.name === 'ResourceNotFoundException' || awsError.message?.includes('not found')) {
-					throw new Error(
-						`Lambda function '${LAMBDA_FUNCTION_NAME}' not found in region '${AWS_REGION}'. ` +
-						`Please check the function name and region.`
-					);
-				}
-				if (awsError.name === 'AccessDeniedException' || awsError.message?.includes('AccessDenied')) {
-					throw new Error(
-						`Access denied to Lambda function '${LAMBDA_FUNCTION_NAME}'. ` +
-						`Please check your IAM permissions.`
-					);
-				}
-				throw awsError;
+				throw fetchError;
 			}
 		}
 

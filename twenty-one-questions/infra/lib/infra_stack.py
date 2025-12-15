@@ -15,6 +15,8 @@ from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.lambda_function_url import LambdaFunctionUrl
+from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
+from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
 
 
 class TQLambdaStack(TerraformStack):
@@ -26,6 +28,9 @@ class TQLambdaStack(TerraformStack):
         # Configure AWS provider
         region = os.getenv("CDKTF_DEFAULT_REGION", "us-east-1")
         AwsProvider(self, "aws", region=region)
+
+        # Get current AWS account ID
+        current_account = DataAwsCallerIdentity(self, "current")
 
         # Configure S3 backend for Terraform state
         S3Backend(
@@ -177,19 +182,21 @@ class TQLambdaStack(TerraformStack):
             },
         )
 
-        # Lambda Function URL for internal HTTP access
+        # Lambda Function URL for HTTP access from Amplify SSR
+        # Using NONE authorization since Amplify SSR doesn't easily provide IAM credentials
+        # The function validates input and has rate limiting at the Lambda level
         function_url = LambdaFunctionUrl(
             self,
             "function_url",
             function_name=tq_lambda.function_name,
-            authorization_type="AWS_IAM",
+            authorization_type="NONE",
             cors={
                 "allow_credentials": False,
                 "allow_origins": ["*"],
                 "allow_methods": ["GET", "POST"],
-                "allow_headers": ["Content-Type"],
+                "allow_headers": ["Content-Type", "Authorization"],
                 "expose_headers": [],
-                "max_age": 0,
+                "max_age": 86400,
             },
             depends_on=[tq_lambda],
         )
@@ -200,6 +207,26 @@ class TQLambdaStack(TerraformStack):
             "function_url_output",
             value=function_url.function_url,
             description="Lambda Function URL for internal HTTP access",
+        )
+
+        # Lambda permission to allow any principal in this AWS account to invoke the function
+        # This is needed for Amplify SSR to call the Lambda function
+        LambdaPermission(
+            self,
+            "amplify_invoke_permission",
+            function_name=tq_lambda.function_name,
+            action="lambda:InvokeFunction",
+            principal=f"arn:aws:iam::{current_account.account_id}:root",
+            statement_id="AllowAccountInvoke",
+            depends_on=[tq_lambda],
+        )
+
+        # Output the Lambda function name for Amplify configuration
+        TerraformOutput(
+            self,
+            "lambda_function_name",
+            value=tq_lambda.function_name,
+            description="Lambda function name (use this in Amplify LAMBDA_FUNCTION_NAME env var)",
         )
 
         # Output the Lambda function ARN

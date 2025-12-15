@@ -7,37 +7,32 @@ The tq-web application has been configured with two modes:
 1. **Debug Mode**: Calls tq-lambda locally via a Python debug server
 2. **Release Mode**: Calls tq-lambda deployed on AWS Lambda
 
-## Default Setup: AWS Lambda (Local & Deployed)
+## Default Setup: AWS Lambda via Function URL
 
-**By default, the application calls AWS Lambda directly**, whether running locally or deployed.
+**By default, the application calls AWS Lambda via its Function URL** (HTTP endpoint).
 
 ### Prerequisites
-- AWS credentials configured (via `aws configure` or environment variables)
-- Lambda function deployed to AWS
-- IAM permissions to invoke the Lambda function
+- Lambda function deployed to AWS with Function URL enabled
+- Lambda Function URL configured in environment variables
 
 ### Running Locally with AWS Lambda
 
-1. **Configure AWS credentials:**
+1. **Get the Lambda Function URL:**
    ```bash
-   aws configure
+   cd twenty-one-questions/infra
+   cdktf output
    ```
-   Or set environment variables:
-   ```bash
-   export AWS_ACCESS_KEY_ID=your-key
-   export AWS_SECRET_ACCESS_KEY=your-secret
-   export AWS_REGION=us-east-1
-   ```
+   Look for the `function_url_output` value.
 
-2. **Start the dev server:**
+2. **Set the environment variable and start the dev server:**
    ```bash
    cd twenty-one-questions/tq-web
+   export LAMBDA_FUNCTION_URL=https://your-function-url.lambda-url.us-east-1.on.aws/
    npm run dev
    ```
 
-### Environment Variables (Optional)
-- `LAMBDA_FUNCTION_NAME=tq-lambda` (default)
-- `AWS_REGION=us-east-1` (default)
+### Environment Variables
+- `LAMBDA_FUNCTION_URL` - **Required** for production mode. The Lambda Function URL from infrastructure deployment.
 
 ## Debug Mode Setup (Local Python Server)
 
@@ -81,26 +76,47 @@ To use a local Python server instead of AWS Lambda:
 
 ### Prerequisites
 - AWS account with appropriate IAM permissions
-- tq-lambda function deployed to AWS
+- tq-lambda function deployed to AWS with Function URL
 - AWS Amplify app configured
 
 ### Configuration
 
-Set the following environment variables in AWS Amplify:
+#### Step 1: Deploy Infrastructure
 
-1. **In Amplify Console → App Settings → Environment Variables**:
-   - `DEBUG_MODE=false` (or leave unset)
-   - `LAMBDA_FUNCTION_NAME=tq-lambda`
-   - `AWS_REGION=us-east-1` (or your region)
+Deploy the Lambda function and get the Function URL:
 
-2. **IAM Permissions**: Ensure your Amplify deployment role has permission to invoke the Lambda function:
-   ```json
-   {
-     "Effect": "Allow",
-     "Action": "lambda:InvokeFunction",
-     "Resource": "arn:aws:lambda:*:*:function:tq-lambda"
-   }
-   ```
+```bash
+cd twenty-one-questions/infra
+cdktf deploy
+```
+
+Note the `function_url_output` value from the deployment output. It looks like:
+`https://xxxxxxxxxx.lambda-url.us-east-1.on.aws/`
+
+#### Step 2: Set Environment Variables in Amplify
+
+1. Go to **Amplify Console → Your App → Hosting → Environment Variables**
+2. Add the following variable:
+   - `LAMBDA_FUNCTION_URL` = `https://xxxxxxxxxx.lambda-url.us-east-1.on.aws/` (your Function URL from Step 1)
+
+#### Step 3: Redeploy
+
+Trigger a new deployment in Amplify to pick up the environment variable.
+
+### Troubleshooting
+
+**Error: "LAMBDA_FUNCTION_URL environment variable is not set"**
+- Add the `LAMBDA_FUNCTION_URL` environment variable in Amplify Console
+- Get the URL by running `cdktf output` in the infra directory
+- Redeploy the app after adding the variable
+
+**Error: "Cannot connect to Lambda Function URL"**
+- Verify the Lambda function is deployed: `aws lambda get-function --function-name tq-lambda`
+- Check the Function URL is correct and accessible
+- Test the URL directly: `curl -X POST <function-url> -H "Content-Type: application/json" -d '{"sessionKey":"test"}'`
+
+**Test the Lambda connection:**
+Visit `https://your-amplify-app.amplifyapp.com/api/test-lambda` to verify the connection.
 
 ### Building for Release
 
@@ -159,10 +175,10 @@ The `GameBoard.svelte` component:
 ### API Route Errors
 - Check console logs for detailed error messages
 - Verify environment variables are set correctly
-- In release mode, ensure AWS credentials are configured
+- In release mode, ensure `LAMBDA_FUNCTION_URL` is set
 
 ### Lambda Invocation Errors (Release Mode)
-- Verify IAM permissions for Lambda invocation
-- Check Lambda function name matches `LAMBDA_FUNCTION_NAME`
-- Verify AWS region is correct
+- Verify Lambda function is deployed and accessible
+- Check the Function URL is correct (should end with `.lambda-url.<region>.on.aws/`)
+- Test the Function URL directly with curl
 
