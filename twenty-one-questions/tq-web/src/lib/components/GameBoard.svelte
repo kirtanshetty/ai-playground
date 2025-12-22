@@ -18,7 +18,7 @@
 	let sessionKey: string | null = null;
 	let victoryStatement: string | null = null;
 	let defeatStatement: string | null = null;
-	let currentQuestionIsGuess: boolean = false;
+	let guessingPersonality: boolean = false;
 
 	const MAX_QUESTIONS = 21;
 
@@ -56,7 +56,7 @@
 
 			currentQuestion = data.question || '';
 			questionNumber = data.questionNumber || 1;
-			currentQuestionIsGuess = data.guess || false;
+			guessingPersonality = data.guessingPersonality || false;
 		} catch (error) {
 			console.error('Error starting game:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -123,7 +123,7 @@
 
 			currentQuestion = data.question || '';
 			questionNumber = data.questionNumber || questionNumber;
-			currentQuestionIsGuess = data.guess || false;
+			guessingPersonality = data.guessingPersonality || false;
 		} catch (error) {
 			console.error('Error submitting answer:', error);
 			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -143,7 +143,7 @@
 		sessionKey = null;
 		victoryStatement = null;
 		defeatStatement = null;
-		currentQuestionIsGuess = false;
+		guessingPersonality = false;
 	}
 </script>
 

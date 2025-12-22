@@ -10,7 +10,7 @@ export interface GameResponse {
 	questionNumber?: number;
 	totalQuestions?: number;
 	gameCompleted?: boolean;
-	guess?: boolean;
+	guessingPersonality?: boolean;
 	targetPerson?: string | null;
 	victoryStatement?: string | null;
 	defeatStatement?: string | null;

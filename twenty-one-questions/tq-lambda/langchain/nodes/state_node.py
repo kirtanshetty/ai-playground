@@ -8,8 +8,12 @@ from typing import Dict, Any
 def process_answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process the answer provided by the user and update the game state.
-    If the previous question was a guess and the answer is "yes", mark game as completed.
-    If the answer is "no", clear the guessed person (it was wrong).
+    
+    Game ends ONLY if:
+    1. The previous question was a guess (guessingPersonality: true) AND answer is "yes"
+    2. OR 21 questions have been exhausted
+    
+    If guessingPersonality was true but answer is "no", the game continues.
     
     Args:
         state: State dictionary containing:
@@ -35,21 +39,20 @@ def process_answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
             last_qa = game_state.questions_and_answers[-1]
             # Update the answer for the last question
             answer_lower = answer.lower().strip()
-            last_qa["answer"] = answer_lower  # Normalize to lowercase (yes/no)
+            last_qa["answer"] = answer_lower
             
-            # Check if the last question was a guess
-            if last_qa.get("is_guess", False):
+            # Check if the last question was a guess (guessingPersonality: true)
+            if last_qa.get("guessingPersonality", False):
                 if answer_lower in ["yes", "y"]:
                     # Correct guess! Mark game as completed
                     game_state.game_completed = True
                     # Keep the target_person that was set when the guess was made
                 else:
-                    # Wrong guess - clear the target person and continue
+                    # Wrong guess - clear the target person and continue the game
                     game_state.target_person = None
+                    # Game does NOT end - continue playing until 21 questions or correct guess
         else:
-            # No previous question, but answer provided - might be an error
             raise ValueError("Answer provided but no previous question found")
-    # If no answer provided, that's fine - it's the first question or answer will come later
     
     return state
 
@@ -57,14 +60,12 @@ def process_answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
 def update_state_with_question_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Update game state with the new question from LLM.
-    Handles both regular questions and guesses.
-    Skips if next_question is None (game completed).
     
     Args:
         state: State dictionary containing:
             - game_state: GameState object
             - next_question: The next question string from LLM (or None if game completed)
-            - is_guess: Boolean indicating if this is a guess
+            - guessing_personality: Boolean indicating if this is a guess
             - guessed_person: Name of the person if it's a guess
             
     Returns:
@@ -72,7 +73,7 @@ def update_state_with_question_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     game_state = state.get("game_state")
     next_question = state.get("next_question")
-    is_guess = state.get("is_guess", False)
+    guessing_personality = state.get("guessing_personality", False)
     guessed_person = state.get("guessed_person")
     
     if not game_state:
@@ -82,15 +83,15 @@ def update_state_with_question_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if next_question is None:
         return state
     
-    # Add the new question/guess to the state (without answer yet - will be filled in next request)
+    # Add the new question to the state (without answer yet - will be filled in next request)
     game_state.questions_and_answers.append({
         "question": next_question,
         "answer": "",  # Will be filled in next request when user provides answer
-        "is_guess": is_guess,  # Mark if this is a guess
+        "guessingPersonality": guessing_personality,  # Whether this is a guess about a specific person
     })
     
     # If it's a guess, store the guessed person name
-    if is_guess and guessed_person:
+    if guessing_personality and guessed_person:
         game_state.target_person = guessed_person
     
     game_state.current_question_number += 1
@@ -102,4 +103,3 @@ def update_state_with_question_node(state: Dict[str, Any]) -> Dict[str, Any]:
         game_state.game_completed = True
     
     return state
-
