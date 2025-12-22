@@ -1,80 +1,57 @@
 """
-Node for managing game state - handling answers and updating state.
+State management nodes for the 21 questions game.
 """
 
 from typing import Dict, Any
 
+MAX_QUESTIONS = 21
+
 
 def process_answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Process the answer provided by the user and update the game state.
+    Process user's answer to the previous question.
     
-    Game ends ONLY if:
-    1. The previous question was a guess (guessingPersonality: true) AND answer is "yes"
-    2. OR 21 questions have been exhausted
-    
-    If guessingPersonality was true but answer is "no", the game continues.
-    
-    Args:
-        state: State dictionary containing:
-            - game_state: GameState object
-            - answer: Optional answer string (yes/no)
-            
-    Returns:
-        Updated state dictionary
-        
-    Raises:
-        ValueError: If answer is provided but no previous question exists
+    Game ends when:
+    1. User answers "yes" to a guess (guessingPersonality=true) -> WIN
+    2. 21 questions exhausted -> LOSE
     """
     game_state = state.get("game_state")
     answer = state.get("answer")
     
     if not game_state:
-        raise ValueError("game_state is required in state")
+        raise ValueError("game_state is required")
     
-    # If answer is provided, add it to the previous question in the state
-    if answer:
-        # Get the last question (if any)
-        if game_state.questions_and_answers:
-            last_qa = game_state.questions_and_answers[-1]
-            # Update the answer for the last question
-            answer_lower = answer.lower().strip()
-            last_qa["answer"] = answer_lower
-            
-            # Check if the last question was a guess (guessingPersonality: true)
-            if last_qa.get("guessingPersonality", False):
-                if answer_lower in ["yes", "y"]:
-                    # Only mark as completed if we have a valid person name
-                    from langchain.nodes.llm_node import is_valid_person_name
-                    if game_state.target_person and is_valid_person_name(game_state.target_person):
-                        # Correct guess! Mark game as completed
-                        game_state.game_completed = True
-                    else:
-                        # Not a valid person name - treat as wrong guess, continue game
-                        game_state.target_person = None
-                else:
-                    # Wrong guess - clear the target person and continue the game
-                    game_state.target_person = None
-                    # Game does NOT end - continue playing until 21 questions or correct guess
-        else:
-            raise ValueError("Answer provided but no previous question found")
+    if not answer:
+        # No answer yet (first question)
+        return state
+    
+    # Get the last question
+    if not game_state.questions_and_answers:
+        raise ValueError("No previous question to answer")
+    
+    last_qa = game_state.questions_and_answers[-1]
+    answer_lower = answer.lower().strip()
+    
+    # Store the answer
+    last_qa["answer"] = answer_lower
+    
+    # Check if this was a guess
+    was_guess = last_qa.get("guessingPersonality", False)
+    
+    if was_guess and answer_lower in ["yes", "y"]:
+        # Correct guess! Game won.
+        game_state.game_completed = True
+        # target_person should already be set from update_state_with_question_node
+    elif was_guess:
+        # Wrong guess - clear target person, continue game
+        game_state.target_person = None
     
     return state
 
 
 def update_state_with_question_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Update game state with the new question from LLM.
-    
-    Args:
-        state: State dictionary containing:
-            - game_state: GameState object
-            - next_question: The next question string from LLM (or None if game completed)
-            - guessing_personality: Boolean indicating if this is a guess
-            - guessed_person: Name of the person if it's a guess
-            
-    Returns:
-        Updated state dictionary
+    Add the new question from LLM to game state.
     """
     game_state = state.get("game_state")
     next_question = state.get("next_question")
@@ -82,29 +59,27 @@ def update_state_with_question_node(state: Dict[str, Any]) -> Dict[str, Any]:
     guessed_person = state.get("guessed_person")
     
     if not game_state:
-        raise ValueError("game_state is required in state")
+        raise ValueError("game_state is required")
     
-    # If next_question is None, game is completed - don't add anything
-    if next_question is None:
+    # Skip if no question (game already completed)
+    if not next_question:
         return state
     
-    # Add the new question to the state (without answer yet - will be filled in next request)
+    # Add question to history
     game_state.questions_and_answers.append({
         "question": next_question,
-        "answer": "",  # Will be filled in next request when user provides answer
-        "guessingPersonality": guessing_personality,  # Whether this is a guess about a specific person
+        "answer": "",  # Will be filled when user answers
+        "guessingPersonality": guessing_personality,
     })
     
-    # If it's a guess, store the guessed person name
+    # Store guessed person if this is a guess
     if guessing_personality and guessed_person:
         game_state.target_person = guessed_person
     
     game_state.current_question_number += 1
     
-    # Check if we've reached max questions
-    MAX_QUESTIONS = 21
-    if len(game_state.questions_and_answers) >= MAX_QUESTIONS and not game_state.game_completed:
-        # Mark game as lost (reached max questions without guessing correctly)
+    # Check if max questions reached
+    if len(game_state.questions_and_answers) >= MAX_QUESTIONS:
         game_state.game_completed = True
     
     return state

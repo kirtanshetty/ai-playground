@@ -1,66 +1,24 @@
-You are playing a game of "21 Questions to Identify the Person". 
-The goal is to identify a famous REAL PERSON (not fictional) by asking up to 21 yes/no questions.
+You are playing "21 Questions" to identify a famous real person.
 
-IMPORTANT RULES:
-- The person must be a REAL PERSON (not fictional characters, not animals, not objects) - you already know this, so don't ask about it
-- You can only ask yes/no questions
-- You have up to 21 questions total
-- Try to narrow down the possibilities with each question
-- Be strategic and ask questions that eliminate many possibilities at once
-- Once you're confident, you can make a guess about who the person is
-- When you make a guess, format the question as: "Is it [Person's Name]?" or "Are you thinking of [Person's Name]?"
-- If you are very confident about the person's identity, make a guess. Otherwise, ask another strategic yes/no question.
-- LOSING CONDITION: If you reach 21 questions without correctly guessing the person, you lose the game
+RULES:
+- Ask yes/no questions to narrow down who the person is
+- You have 21 questions maximum
+- When confident, guess the specific person
 
-RESPONSE FORMAT:
-You MUST respond with a valid JSON object in this exact format:
-{{
-  "question": "Your yes/no question here?",
-  "guessingPersonality": false
-}}
+RESPONSE FORMAT - You MUST respond with ONLY this JSON (no other text):
+{{"question": "your question here?", "guessingPersonality": false}}
 
-When asking a regular question to narrow down possibilities:
-{{
-  "question": "Is the person you are thinking of still alive?",
-  "guessingPersonality": false
-}}
+For regular questions (narrowing down):
+{{"question": "Is this person alive today?", "guessingPersonality": false}}
 
-When making a guess about a specific person:
-{{
-  "question": "Is it Albert Einstein?",
-  "guessingPersonality": true
-}}
+For guessing a specific person:
+{{"question": "Is it Elon Musk?", "guessingPersonality": true}}
 
-IMPORTANT: 
-- Set "guessingPersonality" to true ONLY when you are guessing a specific person's name
-- Set "guessingPersonality" to false for all other yes/no questions
-- The game only ends when you guess correctly (guessingPersonality: true AND answer is "yes") OR when 21 questions are exhausted
-
-EXAMPLE GAME:
-Question 1: {{"question": "Is the person you are thinking of still alive?", "guessingPersonality": false}}
-Answer: No
-
-Question 2: {{"question": "Were they born before 1900?", "guessingPersonality": false}}
-Answer: Yes
-
-Question 3: {{"question": "Were they a scientist or inventor?", "guessingPersonality": false}}
-Answer: Yes
-
-Question 4: {{"question": "Did they work in physics?", "guessingPersonality": false}}
-Answer: Yes
-
-Question 5: {{"question": "Is it Albert Einstein?", "guessingPersonality": true}}
-Answer: Yes
-
-In this example, questions 1-4 narrow down the possibilities (guessingPersonality: false), and question 5 is a guess about a specific person (guessingPersonality: true).
+IMPORTANT:
+- guessingPersonality = false for general questions
+- guessingPersonality = true ONLY when guessing a specific person's name
+- Response must be valid JSON only, no explanations
 
 {questions_and_answers}
 
-Based on the information above, generate question {current_question_number} to help identify the person.
-Remember to respond ONLY with a valid JSON object in the specified format.
-
-Tips:
-- Ask questions that are not ambiguous
-- For example, if the answer is Lady Gaga, a question like "Is this person an actor?" won't be helpful as Lady Gaga has acted in a movie. Instead, ask "Is acting this person's main profession?"
-- Only set guessingPersonality to true when you're confident enough to guess a specific name
-
+Generate question {current_question_number}. Respond with JSON only:
