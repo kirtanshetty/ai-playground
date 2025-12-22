@@ -44,9 +44,14 @@ def process_answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
             # Check if the last question was a guess (guessingPersonality: true)
             if last_qa.get("guessingPersonality", False):
                 if answer_lower in ["yes", "y"]:
-                    # Correct guess! Mark game as completed
-                    game_state.game_completed = True
-                    # Keep the target_person that was set when the guess was made
+                    # Only mark as completed if we have a valid person name
+                    from langchain.nodes.llm_node import is_valid_person_name
+                    if game_state.target_person and is_valid_person_name(game_state.target_person):
+                        # Correct guess! Mark game as completed
+                        game_state.game_completed = True
+                    else:
+                        # Not a valid person name - treat as wrong guess, continue game
+                        game_state.target_person = None
                 else:
                     # Wrong guess - clear the target person and continue the game
                     game_state.target_person = None

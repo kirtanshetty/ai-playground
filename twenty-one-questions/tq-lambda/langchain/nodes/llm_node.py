@@ -137,6 +137,7 @@ def extract_guessed_person(question: str) -> Optional[str]:
 def is_valid_person_name(name: str) -> bool:
     """
     Validate if a string looks like a real person's name.
+    Must be strict to avoid false positives like "Involved In The Entertainment Industry".
     
     Args:
         name: The string to validate
@@ -147,43 +148,59 @@ def is_valid_person_name(name: str) -> bool:
     if not name or len(name) < 2:
         return False
     
-    words = name.split()
+    name_lower = name.lower().strip()
+    words = name_lower.split()
     
-    # Person names are usually 1-5 words
-    if len(words) > 5:
+    # Person names are usually 1-4 words (First Last, or First Middle Last, etc.)
+    if len(words) > 4:
         return False
     
-    # Exclude common phrases that aren't names
-    invalid_phrases = [
-        'trying to', 'identify', 'a male', 'a female', 'male', 'female',
-        'person', 'someone', 'somebody', 'anyone', 'anybody',
-        'real person', 'famous person', 'historical figure',
-        'yes', 'no', 'maybe', 'perhaps', 'possibly',
-        'thinking of', 'you are', 'you\'re', 'i am', 'i\'m',
-        'the person', 'this person', 'that person',
-        'alive', 'dead', 'famous', 'unknown', 'young', 'old',
-        'rich', 'poor', 'smart', 'popular', 'well-known',
+    # Exclude common phrases and words that aren't names
+    invalid_words = [
+        # Articles and prepositions (names don't typically have these unless it's like "Leonardo da Vinci")
+        'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'from', 'of',
+        # Verbs
+        'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
+        'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
+        'involved', 'known', 'born', 'died', 'worked', 'living', 'active',
+        # Adjectives and descriptors
+        'alive', 'dead', 'famous', 'unknown', 'young', 'old', 'rich', 'poor',
+        'smart', 'popular', 'well-known', 'male', 'female', 'american', 'british',
+        'entertainment', 'industry', 'music', 'film', 'movie', 'sports', 'politics',
+        'science', 'business', 'technology', 'historical', 'modern', 'contemporary',
+        # Pronouns and generic words
+        'person', 'someone', 'somebody', 'anyone', 'anybody', 'they', 'them',
+        'this', 'that', 'these', 'those', 'who', 'what', 'where', 'when', 'why', 'how',
+        # Common non-name words
+        'yes', 'no', 'maybe', 'perhaps', 'possibly', 'probably', 'definitely',
+        'thinking', 'trying', 'identify', 'guess', 'figure',
     ]
     
-    name_lower = name.lower().strip()
-    
-    for phrase in invalid_phrases:
-        if phrase in name_lower:
+    # Check if any word in the name is in the invalid list
+    for word in words:
+        if word in invalid_words:
             return False
     
-    # Exclude descriptions starting with articles
-    if re.match(r'^(a|an|the)\s+[a-z]+', name_lower):
-        return False
-    
-    # Exclude question words
-    question_words = ['what', 'where', 'when', 'why', 'how', 'which', 'who']
-    for word in question_words:
-        if word in name_lower.split():
+    # Exclude if it looks like a phrase/sentence (more than 2 words and contains common words)
+    if len(words) > 2:
+        # Allow "da", "de", "van", "von" for names like "Leonardo da Vinci"
+        allowed_connectors = ['da', 'de', 'van', 'von', 'del', 'la', 'le', 'al', 'bin', 'ibn']
+        non_connector_words = [w for w in words if w not in allowed_connectors]
+        # If after removing connectors we still have more than 3 words, it's likely not a name
+        if len(non_connector_words) > 3:
             return False
     
-    # Exclude common verbs
-    verbs = ['is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had']
-    if any(verb in name_lower.split() for verb in verbs):
+    # Names should generally start with a capital letter (when properly formatted)
+    # But since we're checking lowercase, we check if original had capitals
+    original_words = name.strip().split()
+    if len(original_words) > 0:
+        # At least the first word should have started with a letter
+        first_word = original_words[0]
+        if not first_word[0].isalpha():
+            return False
+    
+    # Exclude if it's a question or statement
+    if '?' in name or name_lower.startswith(('is ', 'are ', 'was ', 'were ', 'do ', 'does ')):
         return False
     
     return True

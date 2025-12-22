@@ -45,19 +45,27 @@ def format_response_node(state: Dict[str, Any]) -> Dict[str, Any]:
     reached_max = questions_asked >= MAX_QUESTIONS
     
     # Check if the last question was a correct guess
+    # Must have guessingPersonality=true AND answer="yes" AND valid person name
     last_qa = game_state.questions_and_answers[-1] if game_state.questions_and_answers else None
+    
+    from langchain.nodes.llm_node import is_valid_person_name
+    
+    # Validate that we have a proper person name (not a phrase like "Involved In Entertainment")
+    has_valid_target = (
+        game_state.target_person is not None and 
+        is_valid_person_name(game_state.target_person) and
+        len(game_state.target_person.split()) <= 4  # Names typically 1-4 words
+    )
+    
     last_was_correct_guess = (
         last_qa and 
         last_qa.get("guessingPersonality", False) and 
-        last_qa.get("answer", "").lower() in ["yes", "y"]
+        last_qa.get("answer", "").lower() in ["yes", "y"] and
+        has_valid_target  # Must have valid target to be a correct guess
     )
     
-    # Validate target person
-    from langchain.nodes.llm_node import is_valid_person_name
-    has_valid_target = game_state.target_person is not None and is_valid_person_name(game_state.target_person)
-    
-    # Game is won if: completed AND valid target AND last was correct guess
-    game_won = is_completed and has_valid_target and last_was_correct_guess
+    # Game is won if: completed AND last was a correct guess (which includes valid target check)
+    game_won = is_completed and last_was_correct_guess
     
     # Game is lost if: reached max questions without correct guess
     game_lost = reached_max and not game_won
